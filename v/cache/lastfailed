@@ -1,0 +1,6 @@
+{
+  "test_api.py::test_health": true,
+  "test_api.py::test_register_no_face": true,
+  "test_api.py::test_cosine_matching_logic": true,
+  "test_api.py::test_verify_no_registered_students": true
+}

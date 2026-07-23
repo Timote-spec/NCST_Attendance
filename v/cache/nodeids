@@ -1,0 +1,9 @@
+[
+  "test_api.py::test_cosine_matching_logic",
+  "test_api.py::test_cosine_similarity",
+  "test_api.py::test_db_insert_and_query",
+  "test_api.py::test_health",
+  "test_api.py::test_register_no_face",
+  "test_api.py::test_sqlite_numpy_roundtrip",
+  "test_api.py::test_verify_no_registered_students"
+]
