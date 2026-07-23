@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NCST Face Recognition — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1E40AF;
+      --secondary: #2563EB;
+      --accent: #3B82F6;
+      --background: #F8FAFC;
+      --card: #FFFFFF;
+      --success: #22C55E;
+      --warning: #F59E0B;
+      --danger: #EF4444;
+      --text: #0F172A;
+      --muted: #64748B;
+      --border: #E2E8F0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--background);
+      color: var(--text);
+    }
+
+    .login-wrap {
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ── Brand Panel ── */
+    .login-brand {
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      width: 45%;
+      background: linear-gradient(135deg, #1a3a8f 0%, var(--secondary) 60%, #60a5fa 100%);
+      color: #fff;
+      padding: 3rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .login-brand::before {
+      content: '';
+      position: absolute;
+      top: -40%;
+      right: -25%;
+      width: 80%;
+      height: 130%;
+      background: rgba(255,255,255,0.06);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .login-brand::after {
+      content: '';
+      position: absolute;
+      bottom: -30%;
+      left: -20%;
+      width: 70%;
+      height: 100%;
+      background: rgba(255,255,255,0.04);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .login-brand .logo-area {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .login-brand .logo-area img {
+      width: 52px;
+      height: 52px;
+      object-fit: contain;
+      background: #fff;
+      border-radius: 12px;
+      padding: 6px;
+    }
+
+    .login-brand .logo-area div h1 {
+      font-size: 1.125rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .login-brand .logo-area div p {
+      font-size: 0.8rem;
+      opacity: 0.8;
+      margin-top: 2px;
+    }
+
+    .login-brand .welcome-text {
+      position: relative;
+      z-index: 1;
+      max-width: 380px;
+    }
+
+    .login-brand .welcome-text h2 {
+      font-size: 2.25rem;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 1rem;
+      letter-spacing: -0.02em;
+    }
+
+    .login-brand .welcome-text p {
+      font-size: 0.9375rem;
+      opacity: 0.88;
+      line-height: 1.7;
+    }
+
+    .login-brand .features {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.625rem;
+    }
+
+    .login-brand .feature-chip {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: rgba(255,255,255,0.13);
+      border: 1px solid rgba(255,255,255,0.18);
+      padding: 0.4375rem 0.875rem;
+      border-radius: 999px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      backdrop-filter: blur(4px);
+    }
+
+    .feature-chip::before {
+      content: '✓';
+      font-size: 0.6875rem;
+      background: rgba(255,255,255,0.25);
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ── Form Area ── */
+    .login-form-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 424px;
+      background: var(--card);
+      border-radius: 18px;
+      padding: 2.5rem 2.25rem;
+      box-shadow: 0 4px 32px rgba(30, 64, 175, 0.1), 0 1px 3px rgba(0,0,0,0.06);
+      border: 1px solid var(--border);
+    }
+
+    .login-card .mobile-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-bottom: 1.75rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .login-card .mobile-logo img {
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
+      background: var(--primary);
+      border-radius: 9px;
+      padding: 4px;
+    }
+
+    .login-card .mobile-logo .brand-name {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .login-card .mobile-logo .brand-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .login-card h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 0.25rem;
+      letter-spacing: -0.02em;
+    }
+
+    .login-card .subtitle {
+      text-align: center;
+      font-size: 0.875rem;
+      color: var(--muted);
+      margin-bottom: 1.875rem;
+    }
+
+    .login-card select,
+    .login-card input[type="text"],
+    .login-card input[type="email"],
+    .login-card input[type="password"] {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.9375rem;
+      font-family: inherit;
+      color: var(--text);
+      background: #fff;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+    }
+
+    .login-card input:focus {
+      border-color: var(--secondary);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    .login-card .field {
+      margin-bottom: 1rem;
+    }
+
+    .login-card .field label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.375rem;
+    }
+
+    .input-wrap {
+      position: relative;
+    }
+
+    .input-wrap input {
+      padding-right: 2.75rem !important;
+    }
+
+    .toggle-pw {
+      position: absolute;
+      right: 0.625rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      padding: 0.25rem;
+      display: flex;
+      align-items: center;
+      border-radius: 4px;
+      transition: color 0.15s;
+    }
+
+    .toggle-pw:hover { color: var(--text); }
+    .toggle-pw svg { width: 1.125rem; height: 1.125rem; }
+
+    .login-card .remember-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+      font-size: 0.8125rem;
+    }
+
+    .login-card .remember-row label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .login-card .remember-row label input[type="checkbox"] {
+      width: 1rem;
+      height: 1rem;
+      accent-color: var(--secondary);
+      cursor: pointer;
+    }
+
+    .login-card .remember-row a {
+      color: var(--secondary);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .login-card .remember-row a:hover { text-decoration: underline; }
+
+    .btn-primary {
+      width: 100%;
+      padding: 0.875rem;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+      box-shadow: 0 2px 8px rgba(37,99,235,0.25);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      opacity: 0.92;
+      box-shadow: 0 4px 14px rgba(37,99,235,0.35);
+    }
+
+    .btn-primary:active:not(:disabled) { transform: scale(0.99); }
+    .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    .btn-scanner {
+      width: 100%;
+      margin-top: 0.75rem;
+      padding: 0.8125rem;
+      background: #fff;
+      color: var(--primary);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .btn-scanner:hover:not(:disabled) {
+      background: #F1F5FF;
+      border-color: var(--accent);
+    }
+
+    .btn-scanner:active:not(:disabled) { transform: scale(0.99); }
+
+    .btn-outline {
+      width: 100%;
+      padding: 0.8125rem;
+      background: transparent;
+      color: var(--primary);
+      border: 1.5px solid var(--primary);
+      border-radius: 10px;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .btn-outline:hover:not(:disabled) { background: rgba(30,64,175,0.05); }
+    .btn-outline:active:not(:disabled) { transform: scale(0.99); }
+
+    .login-card .divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .login-card .divider::before,
+    .login-card .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .login-card .alert {
+      display: none;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      font-size: 0.8125rem;
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+
+    .login-card .alert.show { display: flex; align-items: flex-start; gap: 0.5rem; }
+    .login-card .alert-error { background: #FEF2F2; border: 1px solid #FECACA; color: #B91C1C; }
+    .login-card .alert-success { background: #ECFDF5; border: 1px solid #A7F3D0; color: #047857; }
+
+    .spinner {
+      display: inline-block;
+      width: 1rem;
+      height: 1rem;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (min-width: 1024px) {
+      .login-brand { display: flex; }
+      .login-card .mobile-logo { display: none; }
+    }
+
+    @media (max-width: 480px) {
+      .login-card { padding: 1.75rem 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-brand">
+      <div class="logo-area">
+        <img src="/static/images/ncst-logo.png" alt="NCST Logo">
+        <div>
+          <h1>NCST Attendance</h1>
+          <p>National College of Science &amp; Technology</p>
+        </div>
+      </div>
+      <div class="welcome-text">
+        <h2>Face Recognition Attendance System</h2>
+        <p>Secure, fast, and automated attendance tracking powered by advanced facial recognition technology for every role in the institution.</p>
+      </div>
+      <div class="features">
+        <span class="feature-chip">Real-time recognition</span>
+        <span class="feature-chip">Accurate logging</span>
+        <span class="feature-chip">Auto role detection</span>
+        <span class="feature-chip">Analytics &amp; reports</span>
+        <span class="feature-chip">Multi-face detection</span>
+      </div>
+    </div>
+
+    <div class="login-form-area">
+      <div class="login-card">
+        <div class="mobile-logo">
+          <img src="/static/images/ncst-logo.png" alt="NCST Logo">
+          <div>
+            <div class="brand-name">NCST Attendance</div>
+            <div class="brand-sub">Face Recognition System</div>
+          </div>
+        </div>
+
+        <h2>Welcome back</h2>
+        <p class="subtitle">Sign in — your portal is detected automatically</p>
+
+        <div id="alert-error" class="alert alert-error" role="alert">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+          <span id="alert-error-text"></span>
+        </div>
+        <div id="alert-success" class="alert alert-success" role="alert">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span id="alert-success-text"></span>
+        </div>
+
+        <form id="login-form" novalidate autocomplete="off">
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required autocomplete="email" placeholder="you@ncst.edu">
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="input-wrap">
+              <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="Enter your password">
+              <button type="button" class="toggle-pw" id="btn-toggle" aria-label="Toggle password visibility">
+                <svg id="icon-eye" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="remember-row">
+            <label><input type="checkbox" id="remember" name="remember"> Remember me</label>
+            <a href="/forgot-password">Forgot password?</a>
+          </div>
+
+          <button type="submit" class="btn-primary" id="btn-submit">Sign In</button>
+        </form>
+
+        <button class="btn-scanner" id="btn-scanner" type="button">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9V6a1 1 0 011-1h3M21 9V6a1 1 0 00-1-1h-3M3 15v3a1 1 0 001 1h3m12-4v3a1 1 0 01-1 1h-3"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12a3 3 0 106 0 3 3 0 00-6 0z"/>
+          </svg>
+          Public Scanner
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api/v1';
+    const TOKEN_KEY = 'ncst_token';
+    const USER_KEY = 'ncst_user';
+
+    function showAlert(type, msg) {
+      // Hide both first
+      document.getElementById('alert-error').classList.remove('show');
+      document.getElementById('alert-success').classList.remove('show');
+      const el = document.getElementById('alert-' + type);
+      const txt = document.getElementById('alert-' + type + '-text');
+      if (!el || !txt) return;
+      txt.textContent = msg;
+      el.classList.add('show');
+      if (type === 'error') {
+        setTimeout(() => el.classList.remove('show'), 5000);
+      }
+    }
+
+    function setCookie(name, value, days) {
+      const d = new Date();
+      d.setTime(d.getTime() + (days * 24 * 60 * 60 * 1000));
+      document.cookie = name + '=' + value + ';expires=' + d.toUTCString() + ';path=/;SameSite=Strict';
+    }
+
+    function getCookie(name) {
+      const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+      return match ? match[2] : null;
+    }
+
+    // ── Password toggle ──
+    document.getElementById('btn-toggle')?.addEventListener('click', () => {
+      const pw = document.getElementById('password');
+      const eye = document.getElementById('icon-eye');
+      if (pw.type === 'password') {
+        pw.type = 'text';
+        eye.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a10.05 10.05 0 011.563-3.029m5.858.908a3 3 0 114.292 4.292M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.542 7a10.058 10.058 0 01-3.3 5.568M3 3l18 18"/>';
+      } else {
+        pw.type = 'password';
+        eye.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>';
+      }
+    });
+
+    document.getElementById('btn-scanner')?.addEventListener('click', () => {
+      window.location.href = '/scanner';
+    });
+
+    // ── Login form submit ──
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      document.getElementById('alert-error').classList.remove('show');
+      document.getElementById('alert-success').classList.remove('show');
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const remember = document.getElementById('remember').checked;
+      const btn = document.getElementById('btn-submit');
+      const origText = btn.textContent;
+
+      if (!email || !password) {
+        showAlert('error', 'Please enter your email and password.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Signing in…';
+
+      try {
+        const res = await fetch(API_BASE + '/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.detail || 'Invalid credentials. Please try again.');
+
+        // ── Store token & user ──
+        localStorage.setItem(TOKEN_KEY, data.access_token);
+        localStorage.setItem(USER_KEY, JSON.stringify({
+          email,
+          role: data.role,
+          name: data.name
+        }));
+        if (remember) setCookie(TOKEN_KEY, data.access_token, 7);
+
+        // ── Auto role-based redirect ──
+        const role = (data.role || '').toUpperCase();
+        showAlert('success', `Welcome back, ${data.name || email}! Redirecting…`);
+
+        setTimeout(() => {
+          if (role === 'ADMIN') {
+            window.location.replace('/');
+          } else if (role === 'STAFF' || role === 'FACULTY') {
+            window.location.replace('/');
+          } else {
+            // STUDENT or any other role
+            window.location.replace('/');
+          }
+        }, 800);
+
+      } catch (err) {
+        showAlert('error', err.message);
+        btn.disabled = false;
+        btn.textContent = origText;
+      }
+    });
+  </script>
+</body>
+</html>

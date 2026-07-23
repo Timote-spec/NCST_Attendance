@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>NCST — RFID Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; width: 100%; overflow: hidden;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #0a0e1a;
+      color: #f1f5f9;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    .kiosk {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      height: 100vh; width: 100vw;
+      background: radial-gradient(ellipse at 50% 0%, #141b33 0%, #0a0e1a 70%);
+    }
+
+    /* ── Top Bar ── */
+    .kiosk-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.6rem 1.2rem;
+      background: rgba(10,14,26,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      z-index: 10;
+    }
+    .kiosk-brand { display: flex; align-items: center; gap: 0.65rem; }
+    .kiosk-brand img { width: 34px; height: 34px; border-radius: 8px; background: #fff; padding: 3px; object-fit: contain; }
+    .kiosk-brand .brand-text { font-weight: 700; font-size: 0.95rem; letter-spacing: -0.01em; }
+    .kiosk-brand .brand-sub { font-size: 0.7rem; color: rgba(255,255,255,0.4); font-weight: 500; letter-spacing: 0.03em; }
+    .kiosk-clock { display: flex; align-items: center; gap: 0.5rem; }
+    .kiosk-clock .date-part { font-size: 0.82rem; font-weight: 500; color: rgba(255,255,255,0.55); }
+    .kiosk-clock .time-part {
+      font-size: 1.15rem; font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+      background: rgba(255,255,255,0.06);
+      padding: 0.25rem 0.7rem;
+      border-radius: 8px;
+    }
+    .kiosk-status { display: flex; align-items: center; gap: 0.5rem; }
+    .kiosk-status .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: rgba(255,255,255,0.15);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .kiosk-status .dot.active { background: #22c55e; box-shadow: 0 0 12px rgba(34,197,94,0.5); animation: pulse-dot 2s ease-in-out infinite; }
+    .kiosk-status .dot.error { background: #ef4444; box-shadow: 0 0 12px rgba(239,68,68,0.5); }
+    @keyframes pulse-dot { 0%,100% { box-shadow: 0 0 6px rgba(34,197,94,0.4); } 50% { box-shadow: 0 0 18px rgba(34,197,94,0.7); } }
+    .kiosk-status .status-text { font-size: 0.78rem; font-weight: 500; color: rgba(255,255,255,0.5); }
+
+    /* ── Main Body ── */
+    .kiosk-body {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 0;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── RFID Scan Section ── */
+    .rfid-section {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 2rem;
+      position: relative;
+      gap: 1.5rem;
+    }
+    .rfid-icon {
+      width: 100px; height: 100px;
+      border-radius: 50%;
+      background: rgba(59,130,246,0.1);
+      border: 2px solid rgba(59,130,246,0.2);
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.3s;
+    }
+    .rfid-icon.scanning {
+      border-color: #3b82f6;
+      box-shadow: 0 0 30px rgba(59,130,246,0.2);
+      animation: rfid-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes rfid-pulse {
+      0%, 100% { box-shadow: 0 0 20px rgba(59,130,246,0.15); }
+      50% { box-shadow: 0 0 40px rgba(59,130,246,0.35); }
+    }
+    .rfid-icon svg { opacity: 0.6; }
+    .rfid-section .prompt {
+      text-align: center;
+    }
+    .rfid-section .prompt h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .rfid-section .prompt p { font-size: 0.9rem; color: rgba(255,255,255,0.4); }
+
+    .rfid-input-area {
+      width: 100%; max-width: 420px;
+      display: flex; flex-direction: column; gap: 0.75rem;
+      position: relative;
+    }
+    .rfid-input-area input {
+      width: 100%;
+      padding: 1rem 1.2rem;
+      border-radius: 14px;
+      border: 2px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: #f1f5f9;
+      font-family: 'Inter', monospace;
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-align: center;
+      text-transform: uppercase;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .rfid-input-area input:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 20px rgba(59,130,246,0.1);
+    }
+    .rfid-input-area input::placeholder {
+      color: rgba(255,255,255,0.15);
+      font-weight: 500;
+      font-size: 0.9rem;
+      letter-spacing: 0.05em;
+    }
+    .rfid-input-area .input-hint {
+      font-size: 0.75rem; color: rgba(255,255,255,0.25);
+      text-align: center;
+    }
+    .rfid-input-area .input-hint kbd {
+      background: rgba(255,255,255,0.06);
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-family: inherit;
+      color: rgba(255,255,255,0.4);
+    }
+    /* Hidden input that always captures RFID reader keystrokes */
+    #rfid-hidden-input {
+      position: fixed; top: 0; left: 0;
+      width: 1px; height: 1px;
+      opacity: 0; margin: 0; padding: 0; border: none;
+    }
+    /* Last scanned UID badge */
+    .last-uid {
+      font-size: 0.7rem; color: rgba(255,255,255,0.2);
+      text-align: center; margin-top: -0.25rem;
+    }
+    .last-uid code {
+      background: rgba(255,255,255,0.04);
+      padding: 0.1rem 0.4rem; border-radius: 4px;
+      font-family: 'Inter', monospace;
+    }
+
+    /* ── Success / Error Overlay (full-screen) ── */
+    .result-overlay {
+      position: absolute; inset: 0; z-index: 20;
+      display: none;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 0.75rem; padding: 2rem;
+      animation: resultIn 0.4s ease-out;
+    }
+    .result-overlay.visible { display: flex; }
+    @keyframes resultIn { from { opacity:0;transform:scale(0.92) } to { opacity:1;transform:scale(1) } }
+    .result-overlay.success { background: rgba(10,14,26,0.93); backdrop-filter: blur(14px); }
+    .result-overlay.error { background: rgba(10,14,26,0.93); backdrop-filter: blur(14px); }
+    .result-overlay .photo-frame {
+      width: 110px; height: 110px; border-radius: 50%;
+      overflow: hidden;
+      background: rgba(255,255,255,0.05);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .result-overlay.success .photo-frame { border: 4px solid #22c55e; box-shadow: 0 0 50px rgba(34,197,94,0.15); }
+    .result-overlay.error .photo-frame { border: 4px solid #ef4444; box-shadow: 0 0 50px rgba(239,68,68,0.15); }
+    .result-overlay .photo-frame img { width: 100%; height: 100%; object-fit: cover; }
+    .result-overlay .photo-frame .no-photo {
+      font-size: 2rem; font-weight: 700; color: rgba(255,255,255,0.15);
+    }
+    .result-overlay .r-name { font-size: 1.6rem; font-weight: 700; }
+    .result-overlay .r-id { font-size: 1rem; color: rgba(255,255,255,0.5); }
+    .result-overlay .r-info { font-size: 0.88rem; color: rgba(255,255,255,0.4); text-align: center; max-width: 340px; }
+    .result-overlay .r-time { font-size: 0.78rem; color: rgba(255,255,255,0.3); }
+    .result-overlay .r-badge {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.5rem 1.2rem; border-radius: 999px;
+      font-size: 0.9rem; font-weight: 700;
+    }
+    .result-overlay.success .r-badge { background: rgba(34,197,94,0.12); color: #22c55e; }
+    .result-overlay.error .r-badge { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .result-overlay .r-countdown { font-size: 0.75rem; color: rgba(255,255,255,0.25); margin-top: 0.25rem; }
+
+    /* ── Success animation ── */
+    .checkmark-circle {
+      width: 60px; height: 60px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(34,197,94,0.15);
+      animation: checkPop 0.5s ease-out;
+    }
+    .checkmark-circle svg { stroke: #22c55e; }
+    @keyframes checkPop {
+      0% { transform: scale(0); opacity: 0; }
+      50% { transform: scale(1.15); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* ── Error animation ── */
+    .x-circle {
+      width: 60px; height: 60px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(239,68,68,0.15);
+      animation: xPop 0.5s ease-out;
+    }
+    .x-circle svg { stroke: #ef4444; }
+    @keyframes xPop {
+      0% { transform: scale(0); opacity: 0; }
+      50% { transform: scale(1.15); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* ── Results Panel ── */
+    .results-panel {
+      background: rgba(10,14,26,0.6);
+      backdrop-filter: blur(8px);
+      border-left: 1px solid rgba(255,255,255,0.04);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .results-panel .panel-header {
+      padding: 0.8rem 1rem;
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: rgba(255,255,255,0.3);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .results-panel .panel-header .clear-link {
+      background: none; border: none; color: rgba(255,255,255,0.25);
+      font-size: 0.7rem; cursor: pointer; font-family: inherit;
+      padding: 0.25rem 0.5rem; border-radius: 4px;
+    }
+    .results-panel .panel-header .clear-link:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+    .results-scroll {
+      flex: 1; overflow-y: auto;
+      padding: 0.5rem;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.06) transparent;
+    }
+    .results-scroll::-webkit-scrollbar { width: 4px; }
+    .results-scroll::-webkit-scrollbar-track { background: transparent; }
+    .results-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+    .result-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px; padding: 0.85rem 1rem;
+      margin-bottom: 0.5rem;
+      animation: slideIn 0.2s ease-out;
+    }
+    @keyframes slideIn { from { opacity:0;transform:translateX(12px) } to { opacity:1;transform:translateX(0) } }
+    .result-card.success { border-color: rgba(34,197,94,0.2); background: rgba(34,197,94,0.05); }
+    .result-card.error { border-color: rgba(239,68,68,0.2); background: rgba(239,68,68,0.05); }
+    .result-card .r-name { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.15rem; }
+    .result-card .r-detail { font-size: 0.75rem; color: rgba(255,255,255,0.4); }
+    .result-card .r-meta { font-size: 0.65rem; color: rgba(255,255,255,0.25); margin-top: 0.3rem; }
+
+    .empty-state {
+      text-align: center; color: rgba(255,255,255,0.25);
+      padding: 2rem 1rem; font-size: 0.8rem; line-height: 1.6;
+    }
+    .empty-state svg { opacity: 0.2; margin-bottom: 0.5rem; }
+
+    /* ── Bottom Controls ── */
+    .kiosk-bottom {
+      display: flex; align-items: center; justify-content: center;
+      gap: 0.75rem; padding: 0.6rem 1.2rem;
+      background: rgba(10,14,26,0.85);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(255,255,255,0.04);
+      z-index: 10;
+    }
+    .kiosk-btn {
+      display: flex; align-items: center; gap: 0.45rem;
+      padding: 0.7rem 1.4rem; border-radius: 12px;
+      border: 1.5px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      color: #f1f5f9; font-size: 0.85rem; font-weight: 600;
+      font-family: inherit; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+      touch-action: manipulation;
+    }
+    .kiosk-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); border-color: rgba(59,130,246,0.3); }
+    .kiosk-btn:active:not(:disabled) { transform: scale(0.97); }
+    .kiosk-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .kiosk-btn.primary {
+      background: linear-gradient(135deg, #1e40af, #2563eb);
+      border-color: transparent;
+      box-shadow: 0 2px 12px rgba(37,99,235,0.25);
+    }
+    .kiosk-btn.primary:hover:not(:disabled) { opacity: 0.9; }
+    .fs-toggle {
+      background: none; border: none; color: rgba(255,255,255,0.3);
+      cursor: pointer; padding: 0.25rem; border-radius: 6px;
+      display: flex; align-items: center;
+    }
+    .fs-toggle:hover { color: #fff; background: rgba(255,255,255,0.06); }
+
+    /* ── Scanning overlay ── */
+    .scanning-overlay {
+      position: absolute; inset: 0; z-index: 10;
+      background: rgba(10,14,26,0.8); backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center; flex-direction: column; gap: 1rem;
+    }
+    .scanning-overlay.visible { display: flex; }
+    .scanning-overlay .spinner {
+      width: 48px; height: 48px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #3b82f6;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .scanning-overlay p { font-size: 1rem; font-weight: 600; color: #fff; }
+
+    /* ── Responsive ── */
+    @media (max-width: 820px) {
+      .kiosk-body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+      .results-panel { border-left: none; border-top: 1px solid rgba(255,255,255,0.04); max-height: 30vh; }
+      .kiosk-top { flex-wrap: wrap; gap: 0.4rem; padding: 0.4rem 0.8rem; }
+      .kiosk-clock .date-part { display: none; }
+      .kiosk-btn { padding: 0.6rem 1rem; font-size: 0.78rem; }
+    }
+    @media (max-width: 480px) {
+      .rfid-input-area input { font-size: 1.1rem; }
+      .kiosk-btn .icon { display: none; }
+      .kiosk-btn { padding: 0.55rem 0.75rem; font-size: 0.72rem; }
+      .results-panel { max-height: 25vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="kiosk" id="kiosk">
+    <!-- ── Top Bar ── -->
+    <div class="kiosk-top">
+      <div class="kiosk-brand">
+        <img src="/static/images/ncst-logo.png" alt="NCST">
+        <div>
+          <div class="brand-text">NCST Attendance</div>
+          <div class="brand-sub">RFID Scanner</div>
+        </div>
+      </div>
+      <div class="kiosk-clock">
+        <span class="date-part" id="date-display">---</span>
+        <span class="time-part" id="time-display">--:--:--</span>
+      </div>
+      <div class="kiosk-status">
+        <span class="dot" id="status-dot"></span>
+        <span class="status-text" id="status-text">Ready</span>
+        <button class="fs-toggle" id="btn-fullscreen" title="Toggle full screen">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Body ── -->
+    <div class="kiosk-body">
+      <!-- RFID Scan Area -->
+      <div class="rfid-section" id="rfid-section">
+        <div class="rfid-icon" id="rfid-icon">
+          <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+          </svg>
+        </div>
+
+        <div class="prompt">
+          <h2>Scan RFID Card</h2>
+          <p>Tap an RFID card on the reader or type the UID below.</p>
+        </div>
+
+        <!-- Hidden input: always focused for USB RFID reader keystrokes -->
+        <input type="text" id="rfid-hidden-input" autocomplete="off" inputmode="none" spellcheck="false" value="">
+
+        <div class="rfid-input-area">
+          <input type="text" id="rfid-input" placeholder="RFID UID" autocomplete="off" inputmode="text" spellcheck="false" readonly onfocus="this.blur()" tabindex="-1">
+          <div class="input-hint">Tap RFID card on reader</div>
+          <div class="last-uid" id="last-uid"></div>
+        </div>
+
+        <!-- Scanning overlay -->
+        <div class="scanning-overlay" id="scanning-overlay">
+          <div class="spinner"></div>
+          <p id="scanning-text">Verifying card…</p>
+        </div>
+
+        <!-- Result overlay -->
+        <div class="result-overlay success" id="result-success">
+          <div class="checkmark-circle">
+            <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+          <div class="photo-frame"><span class="no-photo" id="s-photo-placeholder">?</span><img id="s-photo" src="" alt="" style="display:none"></div>
+          <div class="r-name" id="s-name"></div>
+          <div class="r-id" id="s-id"></div>
+          <div class="r-info" id="s-info"></div>
+          <div class="r-time" id="s-time"></div>
+          <div class="r-badge" id="s-badge">✓ Time In Logged</div>
+          <div class="r-countdown" id="s-countdown"></div>
+        </div>
+
+        <div class="result-overlay error" id="result-error">
+          <div class="x-circle">
+            <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </div>
+          <div class="photo-frame"><span class="no-photo">!</span></div>
+          <div class="r-name" id="e-title" style="color:#ef4444">Scan Failed</div>
+          <div class="r-info" id="e-message" style="color:rgba(255,255,255,0.5)">RFID card not recognized.</div>
+          <div class="r-countdown" id="e-countdown"></div>
+        </div>
+      </div>
+
+      <!-- Results Panel -->
+      <div class="results-panel">
+        <div class="panel-header">
+          <span>Scan Results</span>
+          <button class="clear-link" id="btn-clear">Clear all</button>
+        </div>
+        <div class="results-scroll" id="results-scroll">
+          <div class="empty-state" id="empty-state">
+            <svg width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:block;margin:0 auto 0.5rem">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+            </svg>
+            No scans yet.<br>Tap an RFID card to begin.
+          </div>
+          <div id="results-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Bottom Controls ── -->
+    <div class="kiosk-bottom">
+      <button class="kiosk-btn" id="btn-manual">
+        <svg class="icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+        </svg>
+        <span id="btn-manual-text">Manual Entry</span>
+      </button>
+      <a href="/" class="kiosk-btn" style="text-decoration:none;margin-left:auto;">
+        <svg class="icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+        </svg>
+        Dashboard
+      </a>
+    </div>
+  </div>
+
+  <script src="/static/assets/js/rfid-listener.js"></script>
+  <script>
+    const API_BASE = '/api/v1';
+    const COOLDOWN_MS = 30000;
+    window.__rfidCooldowns = window.__rfidCooldowns || new Map();
+    const scanCooldowns = window.__rfidCooldowns;
+
+    // ── DOM refs ──
+    const rfidHiddenInput = document.getElementById('rfid-hidden-input');
+    const rfidInput      = document.getElementById('rfid-input');
+    const rfidIcon       = document.getElementById('rfid-icon');
+    const scanningOverlay= document.getElementById('scanning-overlay');
+    const scanningText   = document.getElementById('scanning-text');
+    const resultSuccess  = document.getElementById('result-success');
+    const resultError    = document.getElementById('result-error');
+    const sPhoto         = document.getElementById('s-photo');
+    const sPhotoPlace    = document.getElementById('s-photo-placeholder');
+    const sName          = document.getElementById('s-name');
+    const sId            = document.getElementById('s-id');
+    const sInfo          = document.getElementById('s-info');
+    const sTime          = document.getElementById('s-time');
+    const sBadge         = document.getElementById('s-badge');
+    const sCountdown     = document.getElementById('s-countdown');
+    const eTitle         = document.getElementById('e-title');
+    const eMessage       = document.getElementById('e-message');
+    const eCountdown     = document.getElementById('e-countdown');
+    const statusDot      = document.getElementById('status-dot');
+    const statusText     = document.getElementById('status-text');
+    const resultsList    = document.getElementById('results-list');
+    const emptyState     = document.getElementById('empty-state');
+    const btnClear       = document.getElementById('btn-clear');
+    const btnManual      = document.getElementById('btn-manual');
+    const btnManualText  = document.getElementById('btn-manual-text');
+    const dateDisplay    = document.getElementById('date-display');
+    const timeDisplay    = document.getElementById('time-display');
+
+    let scanning = false;
+    let confirmTimer = null;
+    let lastResult = null;
+
+    // ── Clock ──
+    function updateDateTime() {
+      const now = new Date();
+      const opts = { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', weekday: 'short' };
+      dateDisplay.textContent = now.toLocaleDateString('en-US', opts);
+      timeDisplay.textContent = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+
+    // ── Status ──
+    function setStatus(text, type) {
+      statusText.textContent = text;
+      statusDot.className = 'dot' + (type ? ' ' + type : '');
+    }
+
+    // ── Fullscreen ──
+    document.getElementById('btn-fullscreen').addEventListener('click', () => {
+      if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(() => {}); }
+      else { document.exitFullscreen().catch(() => {}); }
+    });
+
+    // ── Cooldown ──
+    function isOnCooldown(userId) {
+      if (!scanCooldowns.has(userId)) return false;
+      return (Date.now() - scanCooldowns.get(userId)) < COOLDOWN_MS;
+    }
+    function setCooldown(userId) { scanCooldowns.set(userId, Date.now()); }
+    function getRemainingCooldown(userId) {
+      if (!scanCooldowns.has(userId)) return 0;
+      const elapsed = Date.now() - scanCooldowns.get(userId);
+      return Math.max(0, Math.ceil((COOLDOWN_MS - elapsed) / 1000));
+    }
+
+    // ── RFID event handlers (global listener drives scanning) ──
+    document.addEventListener('rfid:scanning-start', function () {
+      scanning = true;
+      rfidIcon.classList.add('scanning');
+      scanningOverlay.classList.add('visible');
+      scanningText.textContent = 'Verifying card…';
+      setStatus('Scanning…', 'active');
+    });
+
+    document.addEventListener('rfid:scanning-end', function () {
+      scanning = false;
+      scanningOverlay.classList.remove('visible');
+      rfidIcon.classList.remove('scanning');
+      rfidInput.value = '';
+      setStatus('Ready');
+    });
+
+    document.addEventListener('rfid:success', function (e) {
+      try {
+        var data = e.detail;
+        console.log('[RFID-UI] rfid:success received', { data: data });
+        showSuccess(data);
+        addResultCard(data, true);
+      } catch (err) {
+        console.error('[RFID-UI] success handler crashed', err);
+        try { showError('UI error while rendering success.'); } catch {}
+      }
+    });
+
+    document.addEventListener('rfid:error', function (e) {
+      try {
+        console.error('[RFID-UI] rfid:error received', e && e.detail);
+        var msg = e && e.detail && e.detail.detail ? e.detail.detail : 'Scan failed';
+        showError(msg);
+        addResultCard({ detail: msg }, false);
+      } catch (err) {
+        console.error('[RFID-UI] error handler crashed', err);
+      }
+    });
+
+    document.addEventListener('rfid:cooldown', function (e) {
+      try {
+        var data = e.detail || {};
+        var rem = data.remaining || 30;
+        console.warn('[RFID-UI] rfid:cooldown received', { user_name: data.user_name, remaining: rem });
+        showError('Already recorded recently. Available in ~' + rem + 's.');
+        addResultCard(Object.assign({}, data, { _cooldown: true, _cooldown_secs: rem }), true, true);
+      } catch (err) {
+        console.error('[RFID-UI] cooldown handler crashed', err);
+      }
+    });
+
+    function requireEl(el, name) {
+      if (!el) {
+        console.error('[RFID-UI] missing DOM element:', name);
+        return false;
+      }
+      return true;
+    }
+
+    // ── Show success ──
+    function showSuccess(data) {
+      if (!requireEl(resultSuccess, 'resultSuccess') || !requireEl(resultError, 'resultError')) return;
+      playBeep(true);
+      resultError.classList.remove('visible');
+      resultSuccess.classList.add('visible');
+
+      if (requireEl(sPhoto, 'sPhoto') && requireEl(sPhotoPlace, 'sPhotoPlace')) {
+        if (data.photo_url) {
+          sPhoto.src = data.photo_url;
+          sPhoto.style.display = '';
+          sPhotoPlace.style.display = 'none';
+        } else {
+          sPhoto.style.display = 'none';
+          sPhotoPlace.style.display = '';
+          sPhotoPlace.textContent = (data.user_name || '?')[0].toUpperCase();
+        }
+      }
+
+      if (requireEl(sName, 'sName') && requireEl(sId, 'sId')) {
+        sName.textContent = data.user_name || 'Student';
+        sId.textContent = 'ID: ' + (data.user_id || '');
+      }
+
+      var info = [];
+      if (data.section) info.push('Section: ' + data.section);
+      if (data.course) info.push(data.course);
+      if (data.year_level) info.push('Year ' + data.year_level);
+      if (data.department_section) info.push(data.department_section);
+      if (requireEl(sInfo, 'sInfo')) sInfo.textContent = info.join(' · ');
+
+      if (requireEl(sTime, 'sTime')) sTime.textContent = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
+
+      var action = data.scan_action || 'in';
+      var isLate = data.attendance_status === 'LATE';
+      if (requireEl(sBadge, 'sBadge')) {
+        if (action === 'out') { sBadge.textContent = '✓ Time Out Logged'; sBadge.style.color = '#22c55e'; }
+        else if (isLate) { sBadge.textContent = '⏰ Late Check-in'; sBadge.style.color = '#f59e0b'; }
+        else { sBadge.textContent = '✓ Time In Logged'; sBadge.style.color = '#22c55e'; }
+      }
+
+      if (!requireEl(sCountdown, 'sCountdown')) return;
+      var seconds = 4;
+      sCountdown.textContent = 'Closing in ' + seconds + 's…';
+      if (confirmTimer) clearInterval(confirmTimer);
+      confirmTimer = setInterval(function () {
+        seconds--;
+        if (seconds <= 0) { clearInterval(confirmTimer); confirmTimer = null; resultSuccess.classList.remove('visible'); }
+        else { sCountdown.textContent = 'Closing in ' + seconds + 's…'; }
+      }, 1000);
+    }
+
+    // ── Show error ──
+    function showError(message) {
+      if (!requireEl(resultSuccess, 'resultSuccess') || !requireEl(resultError, 'resultError')) return;
+      playBeep(false);
+      resultSuccess.classList.remove('visible');
+      resultError.classList.add('visible');
+
+      if (requireEl(eTitle, 'eTitle')) eTitle.textContent = 'Scan Failed';
+      if (requireEl(eMessage, 'eMessage')) eMessage.textContent = message;
+
+      if (!requireEl(eCountdown, 'eCountdown')) return;
+      var seconds = 3;
+      eCountdown.textContent = 'Closing in ' + seconds + 's…';
+      if (confirmTimer) clearInterval(confirmTimer);
+      confirmTimer = setInterval(function () {
+        seconds--;
+        if (seconds <= 0) { clearInterval(confirmTimer); confirmTimer = null; resultError.classList.remove('visible'); }
+        else { eCountdown.textContent = 'Closing in ' + seconds + 's…'; }
+      }, 1000);
+    }
+
+    // ── Add result card ──
+    function addResultCard(data, isOk, suppressed) {
+      suppressed = suppressed || false;
+      emptyState.style.display = 'none';
+      const card = document.createElement('div');
+      card.className = 'result-card ' + (isOk ? 'success' : 'error');
+      const ts = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
+
+      if (isOk && !suppressed) {
+        const inTime = data.time_in || '--';
+        const outTime = data.time_out || '--';
+        const status = data.attendance_status || 'PRESENT';
+        const action = data.scan_action || 'in';
+        const badgeLabel = action === 'out' ? '✓ Time Out' : (status === 'LATE' ? '⏰ Late' : '✓ Time In');
+        const badgeColor = (action === 'out' || status === 'PRESENT') ? '#22c55e' : '#f59e0b';
+        card.innerHTML = '<div class="r-name">' + esc(data.user_name || 'Unknown') + '</div>' +
+          '<div class="r-detail">ID: ' + esc(data.user_id) + ' · ' + badgeLabel + '</div>' +
+          '<div class="r-meta">' + esc(inTime) + ' – ' + esc(outTime) + ' · ' + ts + '</div>';
+      } else if (isOk && suppressed) {
+        const rem = data._cooldown_secs || '—';
+        card.innerHTML = '<div class="r-name">' + esc(data.user_name || 'Unknown') + '</div>' +
+          '<div class="r-detail">⏱ Cooldown — available in ~' + rem + 's</div>' +
+          '<div class="r-meta">' + ts + '</div>';
+      } else {
+        card.innerHTML = '<div class="r-name" style="color:#ef4444">Scan Failed</div>' +
+          '<div class="r-detail">' + esc(data.detail || data.message || 'Card not recognized') + '</div>' +
+          '<div class="r-meta">' + ts + '</div>';
+      }
+
+      resultsList.prepend(card);
+      while (resultsList.children.length > 20) { resultsList.removeChild(resultsList.lastChild); }
+      resultsList.closest('.results-scroll').scrollTop = 0;
+    }
+
+    // ── Beep ──
+    function playBeep(success) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = success ? 880 : 220; osc.type = 'sine';
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (success ? 0.25 : 0.4));
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
+      } catch {}
+    }
+
+    // ── Manual entry via modal (uses global listener) ──
+    btnManual.addEventListener('click', function () {
+      var uid = prompt('Enter RFID UID manually:');
+      if (uid && uid.trim()) {
+        if (window.RFIDListener) {
+          window.RFIDListener.processManual(uid.trim());
+        }
+      }
+    });
+
+    // ── Clear ──
+    btnClear.addEventListener('click', function () {
+      resultsList.innerHTML = '';
+      emptyState.style.display = 'block';
+    });
+
+    // ── Utility ──
+    function esc(str) { return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+    // ── Start global RFID listener on load ──
+    window.addEventListener('load', function () {
+      if (window.RFIDListener) {
+        window.RFIDListener.start();
+      }
+    });
+  </script>
+</body>
+</html>

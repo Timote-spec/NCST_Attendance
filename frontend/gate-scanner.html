@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>NCST — Gate Scanner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;width:100%;overflow:hidden;font-family:'Inter',system-ui,-apple-system,sans-serif;background:#0a0e1a;color:#f1f5f9;-webkit-font-smoothing:antialiased;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+    .kiosk{display:grid;grid-template-rows:auto 1fr auto;height:100vh;width:100vw;background:radial-gradient(ellipse at 50% 0%,#141b33 0%,#0a0e1a 70%)}
+    .kiosk-top{display:flex;align-items:center;justify-content:space-between;padding:0.6rem 1.2rem;background:rgba(10,14,26,0.85);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,0.06);z-index:10}
+    .kiosk-brand{display:flex;align-items:center;gap:0.65rem}
+    .kiosk-brand img{width:34px;height:34px;border-radius:8px;background:#fff;padding:3px;object-fit:contain}
+    .kiosk-brand .brand-text{font-weight:700;font-size:0.95rem;letter-spacing:-0.01em}
+    .kiosk-brand .brand-sub{font-size:0.7rem;color:rgba(255,255,255,0.4);font-weight:500;letter-spacing:0.03em}
+    .kiosk-clock{display:flex;align-items:center;gap:0.5rem}
+    .kiosk-clock .date-part{font-size:0.82rem;font-weight:500;color:rgba(255,255,255,0.55)}
+    .kiosk-clock .time-part{font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:0.02em;background:rgba(255,255,255,0.06);padding:0.25rem 0.7rem;border-radius:8px}
+    .kiosk-status{display:flex;align-items:center;gap:0.5rem}
+    .kiosk-status .dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.15);transition:background 0.3s,box-shadow 0.3s}
+    .kiosk-status .dot.active{background:#22c55e;box-shadow:0 0 12px rgba(34,197,94,0.5);animation:pulse-dot 2s ease-in-out infinite}
+    .kiosk-status .dot.error{background:#ef4444}
+    @keyframes pulse-dot{0%,100%{box-shadow:0 0 6px rgba(34,197,94,0.4)}50%{box-shadow:0 0 18px rgba(34,197,94,0.7)}}
+    .kiosk-status .status-text{font-size:0.78rem;font-weight:500;color:rgba(255,255,255,0.5)}
+
+    .kiosk-body{display:grid;grid-template-columns:1fr 320px;gap:0;overflow:hidden;position:relative}
+    .cam-section{position:relative;overflow:hidden;background:#000;display:flex;align-items:center;justify-content:center}
+    .cam-section video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+    .cam-section video.visible{display:block}
+    .cam-section canvas#overlay-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
+    .scan-corners{position:absolute;inset:24px;z-index:3;pointer-events:none;display:none}
+    .scan-corners.visible{display:block}
+    .scan-corners::before,.scan-corners::after,.corner-br::before,.corner-br::after{content:'';position:absolute;width:32px;height:32px;border-color:rgba(59,130,246,0.6);border-style:solid}
+    .scan-corners::before{top:0;left:0;border-width:3px 0 0 3px;border-radius:6px 0 0 0}
+    .scan-corners::after{top:0;right:0;border-width:3px 3px 0 0;border-radius:0 6px 0 0}
+    .corner-br::before{bottom:0;left:0;border-width:0 0 3px 3px;border-radius:0 0 0 6px}
+    .corner-br::after{bottom:0;right:0;border-width:0 3px 3px 0;border-radius:0 0 6px 0}
+
+    .cam-placeholder{position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#141b33 0%,#0a0e1a 100%);gap:1.25rem}
+    .cam-placeholder.hidden{display:none}
+    .cam-placeholder .placeholder-icon{opacity:0.3;animation:float 3s ease-in-out infinite}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+    .cam-placeholder p{color:rgba(255,255,255,0.35);font-size:0.9rem}
+    .btn-start{padding:1rem 2.5rem;border:none;border-radius:14px;background:linear-gradient(135deg,#1e40af,#2563eb);color:#fff;font-size:1.05rem;font-weight:700;font-family:inherit;cursor:pointer;box-shadow:0 4px 24px rgba(37,99,235,0.3);transition:transform 0.15s,box-shadow 0.15s}
+    .btn-start:hover{transform:scale(1.03);box-shadow:0 6px 32px rgba(37,99,235,0.4)}
+    .btn-start:active{transform:scale(0.97)}
+
+    .scan-overlay{position:absolute;inset:0;z-index:10;background:rgba(10,14,26,0.8);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;flex-direction:column;gap:1rem}
+    .scan-overlay.visible{display:flex}
+    .scan-overlay .spinner{width:52px;height:52px;border:3px solid rgba(255,255,255,0.1);border-top-color:#3b82f6;border-radius:50%;animation:spin 0.7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .scan-overlay p{font-size:1rem;font-weight:600;color:#fff}
+
+    .confirm-overlay{position:absolute;inset:0;z-index:20;background:rgba(10,14,26,0.92);backdrop-filter:blur(14px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:0.75rem;padding:2rem;animation:confirmIn 0.35s ease-out}
+    .confirm-overlay.visible{display:flex}
+    @keyframes confirmIn{from{opacity:0;transform:scale(0.9)}to{opacity:1;transform:scale(1)}}
+    .confirm-overlay .photo-frame{width:100px;height:100px;border-radius:50%;border:4px solid #22c55e;overflow:hidden;background:rgba(255,255,255,0.05);box-shadow:0 0 40px rgba(34,197,94,0.15)}
+    .confirm-overlay .photo-frame img{width:100%;height:100%;object-fit:cover}
+    .confirm-overlay .c-name{font-size:1.5rem;font-weight:700}
+    .confirm-overlay .c-id{font-size:1rem;color:rgba(255,255,255,0.5)}
+    .confirm-overlay .c-info{font-size:0.88rem;color:rgba(255,255,255,0.45);text-align:center;max-width:320px}
+    .confirm-overlay .c-time{font-size:0.78rem;color:rgba(255,255,255,0.35)}
+    .confirm-overlay .c-badge{display:inline-flex;align-items:center;gap:0.4rem;padding:0.4rem 1rem;border-radius:999px;font-size:0.85rem;font-weight:700;background:rgba(34,197,94,0.12);color:#22c55e}
+    .confirm-overlay .c-countdown{font-size:0.75rem;color:rgba(255,255,255,0.3);margin-top:0.25rem}
+    .confirm-overlay .method-tag{font-size:0.7rem;color:rgba(255,255,255,0.25);margin-bottom:0.25rem}
+
+    /* ── RFID section ── */
+    .rfid-section{position:relative;display:none;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,#141b33 0%,#0a0e1a 100%);gap:0.8rem;padding:2rem}
+    .rfid-section.visible{display:flex}
+    .rfid-section .rfid-icon{width:72px;height:72px;border-radius:50%;background:rgba(59,130,246,0.08);border:2px solid rgba(59,130,246,0.15);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.3);transition:all 0.3s}
+    .rfid-section .rfid-icon.scanning{animation:pulse-rfid 0.8s ease-in-out infinite;border-color:#3b82f6;color:#3b82f6}
+    @keyframes pulse-rfid{0%,100%{box-shadow:0 0 0 0 rgba(59,130,246,0.3)}50%{box-shadow:0 0 0 16px rgba(59,130,246,0)}}
+    .rfid-section .prompt{text-align:center}
+    .rfid-section .prompt h2{font-size:1.2rem;font-weight:700}
+    .rfid-section .prompt p{font-size:0.85rem;color:rgba(255,255,255,0.4);margin-top:0.3rem}
+    .rfid-section #rfid-hidden-input{position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;margin:0;padding:0;border:none}
+    .rfid-section .rfid-input-area{display:flex;flex-direction:column;align-items:center;gap:0.5rem;width:100%;max-width:400px}
+    .rfid-section .rfid-input-area input[type="text"]{width:100%;padding:0.85rem 1rem;border-radius:12px;border:1.5px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#f1f5f9;font-family:inherit;font-size:1rem;text-align:center;outline:none;transition:border-color 0.15s}
+    .rfid-section .rfid-input-area input[type="text"]:focus{border-color:#3b82f6}
+    .rfid-section .rfid-input-area .input-hint{font-size:0.75rem;color:rgba(255,255,255,0.25)}
+    .rfid-section .rfid-input-area .last-uid{font-size:0.7rem;color:rgba(255,255,255,0.2)}
+    .rfid-section .rfid-input-area .last-uid code{background:rgba(255,255,255,0.06);padding:1px 6px;border-radius:4px;font-size:0.75rem}
+
+    .results-panel{background:rgba(10,14,26,0.6);backdrop-filter:blur(8px);border-left:1px solid rgba(255,255,255,0.04);display:flex;flex-direction:column;overflow:hidden}
+    .results-panel .panel-header{padding:0.8rem 1rem;font-size:0.7rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:rgba(255,255,255,0.3);border-bottom:1px solid rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:space-between}
+    .results-panel .panel-header .clear-link{background:none;border:none;color:rgba(255,255,255,0.25);font-size:0.7rem;cursor:pointer;font-family:inherit;padding:0.25rem 0.5rem;border-radius:4px}
+    .results-panel .panel-header .clear-link:hover{color:#ef4444;background:rgba(239,68,68,0.1)}
+    .results-scroll{flex:1;overflow-y:auto;padding:0.5rem;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.06) transparent}
+    .results-scroll::-webkit-scrollbar{width:4px}
+    .results-scroll::-webkit-scrollbar-track{background:transparent}
+    .results-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:4px}
+    .result-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:0.85rem 1rem;margin-bottom:0.5rem;animation:slideIn 0.2s ease-out}
+    @keyframes slideIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:translateX(0)}}
+    .result-card.success{border-color:rgba(34,197,94,0.2);background:rgba(34,197,94,0.05)}
+    .result-card.error{border-color:rgba(239,68,68,0.2);background:rgba(239,68,68,0.05)}
+    .result-card .name{font-size:0.95rem;font-weight:700;margin-bottom:0.15rem}
+    .result-card .id{font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:0.6rem}
+    .result-card .meta{display:grid;grid-template-columns:1fr 1fr;gap:0.25rem 0.75rem;font-size:0.75rem}
+    .result-card .meta .row{display:flex;justify-content:space-between}
+    .result-card .meta .label{color:rgba(255,255,255,0.35);text-transform:uppercase;font-size:0.65rem;letter-spacing:0.04em}
+    .result-card .meta .value{font-weight:600}
+    .result-card .checkin-badge{display:inline-flex;align-items:center;gap:0.3rem;font-size:0.7rem;font-weight:700;text-transform:uppercase;padding:0.25rem 0.55rem;border-radius:999px;margin-top:0.5rem}
+    .result-card .timestamp{font-size:0.65rem;color:rgba(255,255,255,0.25);margin-top:0.35rem}
+    .result-card .cooldown-badge{font-size:0.7rem;color:#f59e0b;margin-top:0.2rem}
+    .result-card .method-tag{font-size:0.65rem;color:rgba(255,255,255,0.3);margin-bottom:0.3rem}
+    .empty-state{text-align:center;color:rgba(255,255,255,0.25);padding:2rem 1rem;font-size:0.8rem;line-height:1.6}
+    .empty-state svg{opacity:0.2;margin-bottom:0.5rem}
+
+    .kiosk-bottom{display:flex;align-items:center;justify-content:center;gap:0.75rem;padding:0.6rem 1.2rem;background:rgba(10,14,26,0.85);backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,0.04);z-index:10;flex-wrap:wrap}
+    .kiosk-btn{display:flex;align-items:center;gap:0.45rem;padding:0.7rem 1.4rem;border-radius:12px;border:1.5px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.04);color:#f1f5f9;font-size:0.85rem;font-weight:600;font-family:inherit;cursor:pointer;transition:background 0.15s,border-color 0.15s,transform 0.1s;touch-action:manipulation}
+    .kiosk-btn:hover:not(:disabled){background:rgba(255,255,255,0.08);border-color:rgba(59,130,246,0.3)}
+    .kiosk-btn:active:not(:disabled){transform:scale(0.97)}
+    .kiosk-btn:disabled{opacity:0.3;cursor:not-allowed}
+    .kiosk-btn.primary{background:linear-gradient(135deg,#1e40af,#2563eb);border-color:transparent;box-shadow:0 2px 12px rgba(37,99,235,0.25)}
+    .kiosk-btn.primary:hover:not(:disabled){opacity:0.9}
+    .kiosk-btn.active{background:rgba(59,130,246,0.15);border-color:#3b82f6;color:#60a5fa}
+    .kiosk-btn .icon{width:18px;height:18px}
+
+    .fs-toggle{background:none;border:none;color:rgba(255,255,255,0.3);cursor:pointer;padding:0.25rem;border-radius:6px;display:flex;align-items:center}
+    .fs-toggle:hover{color:#fff;background:rgba(255,255,255,0.06)}
+
+    @media(max-width:820px){
+      .kiosk-body{grid-template-columns:1fr;grid-template-rows:1fr auto}
+      .results-panel{border-left:none;border-top:1px solid rgba(255,255,255,0.04);max-height:30vh}
+      .kiosk-top{flex-wrap:wrap;gap:0.4rem;padding:0.4rem 0.8rem}
+      .kiosk-clock .date-part{display:none}
+      .kiosk-btn{padding:0.6rem 1rem;font-size:0.78rem}
+    }
+    @media(max-width:480px){
+      .kiosk-btn .icon{display:none}
+      .kiosk-btn{padding:0.55rem 0.75rem;font-size:0.72rem}
+      .results-panel{max-height:25vh}
+    }
+  </style>
+</head>
+<body>
+  <div class="kiosk" id="kiosk">
+    <!-- Top Bar -->
+    <div class="kiosk-top">
+      <div class="kiosk-brand">
+        <img src="/static/images/ncst-logo.png" alt="NCST">
+        <div>
+          <div class="brand-text">NCST Attendance</div>
+          <div class="brand-sub" id="brand-sub">Gate Scanner</div>
+        </div>
+      </div>
+      <div class="kiosk-clock">
+        <span class="date-part" id="date-display">---</span>
+        <span class="time-part" id="time-display">--:--:--</span>
+      </div>
+      <div class="kiosk-status">
+        <span class="dot" id="status-dot"></span>
+        <span class="status-text" id="status-text">Ready</span>
+        <button class="fs-toggle" id="btn-fullscreen" title="Toggle full screen">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div class="kiosk-body">
+      <!-- Camera Section (Face + QR modes) -->
+      <div class="cam-section" id="cam-section">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="overlay-canvas"></canvas>
+        <div class="scan-corners" id="scan-corners"><div class="corner-br"></div></div>
+
+        <div class="cam-placeholder" id="cam-placeholder">
+          <div class="placeholder-icon">
+            <svg width="80" height="80" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+          </div>
+          <p id="cam-placeholder-text">Tap to start the camera</p>
+          <button class="btn-start" id="btn-start">Start Camera</button>
+        </div>
+
+        <div class="scan-overlay" id="scan-overlay">
+          <div class="spinner"></div>
+          <p id="scan-overlay-text">Scanning…</p>
+        </div>
+
+        <div class="confirm-overlay" id="confirm-overlay">
+          <div class="method-tag" id="confirm-method">via Face</div>
+          <div class="photo-frame"><img id="confirm-photo" src="/static/images/default-avatar.png" alt=""></div>
+          <div class="c-name" id="confirm-name"></div>
+          <div class="c-id" id="confirm-id"></div>
+          <div class="c-info" id="confirm-info"></div>
+          <div class="c-time" id="confirm-time"></div>
+          <div class="c-badge" id="confirm-badge">✓ Time In Logged</div>
+          <div class="c-countdown" id="confirm-countdown"></div>
+        </div>
+      </div>
+
+      <!-- RFID Section -->
+      <div class="rfid-section" id="rfid-section">
+        <div class="rfid-icon" id="rfid-icon">
+          <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+          </svg>
+        </div>
+        <div class="prompt">
+          <h2>Scan RFID Card</h2>
+          <p>Tap an RFID card on the reader or enter the UID below.</p>
+        </div>
+        <input type="text" id="rfid-hidden-input" autocomplete="off" inputmode="none" spellcheck="false" value="">
+        <div class="rfid-input-area">
+          <input type="text" id="rfid-input" placeholder="RFID UID" autocomplete="off" inputmode="text" spellcheck="false" readonly onfocus="this.blur()" tabindex="-1">
+          <div class="input-hint" id="rfid-hint">Tap RFID card on reader</div>
+          <div class="last-uid" id="last-uid"></div>
+        </div>
+      </div>
+
+      <!-- Results Panel -->
+      <div class="results-panel">
+        <div class="panel-header">
+          <span>Scan Results</span>
+          <button class="clear-link" id="btn-clear">Clear all</button>
+        </div>
+        <div class="results-scroll" id="results-scroll">
+          <div class="empty-state" id="empty-state">
+            <svg width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display:block;margin:0 auto 0.5rem">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+            No scans yet. Select a mode below to begin.
+          </div>
+          <div id="results-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Controls -->
+    <div class="kiosk-bottom">
+      <button class="kiosk-btn primary" id="btn-face-mode" data-mode="face">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+        </svg>
+        <span>Face</span>
+      </button>
+      <button class="kiosk-btn" id="btn-qr-mode" data-mode="qr">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="2" stroke-width="2"/>
+          <path stroke-linecap="round" stroke-width="2" d="M8 12h8M12 8v8"/>
+        </svg>
+        <span>QR</span>
+      </button>
+      <button class="kiosk-btn" id="btn-rfid-mode" data-mode="rfid">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+        </svg>
+        <span>RFID</span>
+      </button>
+      <div style="flex:1"></div>
+      <button class="kiosk-btn" id="btn-manual" style="display:none">
+        <svg class="icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"/>
+        </svg>
+        <span id="btn-manual-text">Manual Entry</span>
+      </button>
+      <a href="/login" class="kiosk-btn" style="text-decoration:none">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
+        </svg>
+        Admin
+      </a>
+    </div>
+  </div>
+
+  <script src="/static/assets/js/rfid-listener.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script>
+    const API_BASE = '/api/v1';
+    const COOLDOWN_MS = 30000;
+    window.__rfidCooldowns = window.__rfidCooldowns || new Map();
+    const scanCooldowns = window.__rfidCooldowns;
+    const MODES = { FACE: 'face', QR: 'qr', RFID: 'rfid' };
+    let currentMode = MODES.FACE;
+    let stream = null;
+    let scanning = false;
+    let confirmTimer = null;
+    let faceDetectLoop = null;
+    let qrDetectLoop = null;
+    let faceDetector = null, faceDetectorSupported = false;
+    let barcodeDetector = null, barcodeSupported = false;
+    const qrCanvas = document.createElement('canvas');
+    const qrCtx = qrCanvas.getContext('2d', { willReadFrequently: true });
+
+    // DOM refs
+    const video = document.getElementById('video');
+    const camSection = document.getElementById('cam-section');
+    const overlayCanvas = document.getElementById('overlay-canvas');
+    const overlayCtx = overlayCanvas.getContext('2d');
+    const placeholder = document.getElementById('cam-placeholder');
+    const placeholderText = document.getElementById('cam-placeholder-text');
+    const scanOverlay = document.getElementById('scan-overlay');
+    const scanOverlayTxt = document.getElementById('scan-overlay-text');
+    const btnStart = document.getElementById('btn-start');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const resultsScroll = document.getElementById('results-scroll');
+    const resultsList = document.getElementById('results-list');
+    const emptyState = document.getElementById('empty-state');
+    const btnClear = document.getElementById('btn-clear');
+    const dateDisplay = document.getElementById('date-display');
+    const timeDisplay = document.getElementById('time-display');
+    const confirmOverlay = document.getElementById('confirm-overlay');
+    const confirmPhoto = document.getElementById('confirm-photo');
+    const confirmName = document.getElementById('confirm-name');
+    const confirmId = document.getElementById('confirm-id');
+    const confirmInfo = document.getElementById('confirm-info');
+    const confirmTime = document.getElementById('confirm-time');
+    const confirmBadge = document.getElementById('confirm-badge');
+    const confirmCountdown = document.getElementById('confirm-countdown');
+    const confirmMethod = document.getElementById('confirm-method');
+    const rfidSection = document.getElementById('rfid-section');
+    const rfidInput = document.getElementById('rfid-input');
+    const rfidIcon = document.getElementById('rfid-icon');
+    const rfidHint = document.getElementById('rfid-hint');
+    const lastUid = document.getElementById('last-uid');
+    const btnManual = document.getElementById('btn-manual');
+    const btnManualText = document.getElementById('btn-manual-text');
+    const scanCorners = document.getElementById('scan-corners');
+    const brandSub = document.getElementById('brand-sub');
+
+    // Mode buttons
+    const btnFaceMode = document.getElementById('btn-face-mode');
+    const btnQrMode = document.getElementById('btn-qr-mode');
+    const btnRfidMode = document.getElementById('btn-rfid-mode');
+    const modeButtons = [btnFaceMode, btnQrMode, btnRfidMode];
+
+    // ── FaceDetector API ──
+    (async () => {
+      if ('FaceDetector' in window) {
+        try { faceDetector = new FaceDetector({ fastMode: true, maxDetectedFaces: 10 }); faceDetectorSupported = true; } catch {}
+      }
+    })();
+
+    // ── BarcodeDetector API ──
+    (async () => {
+      if ('BarcodeDetector' in window) {
+        try { barcodeDetector = new BarcodeDetector({ formats: ['qr_code'] }); barcodeSupported = true; } catch {}
+      }
+    })();
+
+    // ── Clock ──
+    function updateDateTime() {
+      const now = new Date();
+      const opts = { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', weekday: 'short' };
+      dateDisplay.textContent = now.toLocaleDateString('en-US', opts);
+      timeDisplay.textContent = now.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+
+    // ── Status ──
+    function setStatus(text, type) {
+      statusText.textContent = text;
+      statusDot.className = 'dot' + (type ? ' ' + type : '');
+    }
+
+    // ── Canvas ──
+    function syncCanvasSize() {
+      overlayCanvas.width = camSection.clientWidth;
+      overlayCanvas.height = camSection.clientHeight;
+    }
+    function clearCanvas() { overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height); }
+
+    // ── Face drawing ──
+    function drawFaceBox(box, label, color) {
+      const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+      const cw = overlayCanvas.width, ch = overlayCanvas.height;
+      const scaleX = cw / vw, scaleY = ch / vh;
+      const x = box.x * scaleX, y = box.y * scaleY, w = box.width * scaleX, h = box.height * scaleY;
+      overlayCtx.strokeStyle = color;
+      overlayCtx.lineWidth = 3;
+      overlayCtx.shadowColor = color; overlayCtx.shadowBlur = 10;
+      const cornerLen = Math.min(w, h) * 0.2;
+      overlayCtx.beginPath();
+      overlayCtx.moveTo(x, y + cornerLen); overlayCtx.lineTo(x, y); overlayCtx.lineTo(x + cornerLen, y);
+      overlayCtx.moveTo(x + w - cornerLen, y); overlayCtx.lineTo(x + w, y); overlayCtx.lineTo(x + w, y + cornerLen);
+      overlayCtx.moveTo(x + w, y + h - cornerLen); overlayCtx.lineTo(x + w, y + h); overlayCtx.lineTo(x + w - cornerLen, y + h);
+      overlayCtx.moveTo(x + cornerLen, y + h); overlayCtx.lineTo(x, y + h); overlayCtx.lineTo(x, y + h - cornerLen);
+      overlayCtx.stroke();
+      overlayCtx.shadowBlur = 0;
+      if (label) {
+        const fontSize = Math.max(12, Math.min(16, w * 0.1));
+        overlayCtx.font = '700 ' + fontSize + 'px Inter, sans-serif';
+        const txtW = overlayCtx.measureText(label).width;
+        const pad = 8, lblH = fontSize + pad * 2;
+        const lblY = y > lblH + 6 ? y - lblH - 6 : y + h + 6;
+        overlayCtx.fillStyle = color; overlayCtx.globalAlpha = 0.9;
+        const r = 6;
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(x + r, lblY); overlayCtx.lineTo(x + txtW + pad * 2 - r, lblY);
+        overlayCtx.quadraticCurveTo(x + txtW + pad * 2, lblY, x + txtW + pad * 2, lblY + r);
+        overlayCtx.lineTo(x + txtW + pad * 2, lblY + lblH - r);
+        overlayCtx.quadraticCurveTo(x + txtW + pad * 2, lblY + lblH, x + txtW + pad * 2 - r, lblY + lblH);
+        overlayCtx.lineTo(x + r, lblY + lblH);
+        overlayCtx.quadraticCurveTo(x, lblY + lblH, x, lblY + lblH - r);
+        overlayCtx.lineTo(x, lblY + r);
+        overlayCtx.quadraticCurveTo(x, lblY, x + r, lblY);
+        overlayCtx.closePath(); overlayCtx.fill();
+        overlayCtx.globalAlpha = 1;
+        overlayCtx.fillStyle = '#fff';
+        overlayCtx.fillText(label, x + pad, lblY + fontSize + pad * 0.6);
+      }
+    }
+
+    // ── Face tracking ──
+    let trackedFaces = [];
+    let nextTrackId = 0;
+    const TRACK_IOU_THRESHOLD = 0.3;
+    const TRACK_EXPIRY_FRAMES = 6;
+
+    function computeIoU(a, b) {
+      const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
+      const x2 = Math.min(a.x + a.width, b.x + b.width), y2 = Math.min(a.y + a.height, b.y + b.height);
+      const intersection = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+      const union = a.width * a.height + b.width * b.height - intersection;
+      return union === 0 ? 0 : intersection / union;
+    }
+
+    function updateTrackedFaces(detections) {
+      for (const track of trackedFaces) track._missed = (track._missed || 0) + 1;
+      for (const detection of detections) {
+        let best = null, bestIoU = 0;
+        for (const track of trackedFaces) {
+          const iou = computeIoU(detection.boundingBox, track.box);
+          if (iou > bestIoU) { bestIoU = iou; best = track; }
+        }
+        if (best && bestIoU >= TRACK_IOU_THRESHOLD) { best.box = detection.boundingBox; best._missed = 0; }
+        else { trackedFaces.push({ id: nextTrackId++, box: Object.assign({}, detection.boundingBox), status: 'pending', name: null, userId: null, _missed: 0 }); }
+      }
+      trackedFaces = trackedFaces.filter(function (t) { return t._missed < TRACK_EXPIRY_FRAMES; });
+    }
+
+    // ── Face detection loop ──
+    function startFaceDetectLoop() {
+      if (faceDetectLoop) return;
+      faceDetectLoop = setInterval(async () => {
+        if (!stream || !video.videoWidth) return;
+        if (!faceDetectorSupported || !faceDetector) {
+          updateTrackedFaces([{ boundingBox: { x: video.videoWidth * 0.25, y: video.videoHeight * 0.15, width: video.videoWidth * 0.5, height: video.videoHeight * 0.7 } }]);
+          renderFaceBoxes();
+          return;
+        }
+        try {
+          const faces = await faceDetector.detect(video);
+          updateTrackedFaces(faces);
+          renderFaceBoxes();
+        } catch {}
+      }, 120);
+    }
+
+    function stopFaceDetectLoop() {
+      if (faceDetectLoop) { clearInterval(faceDetectLoop); faceDetectLoop = null; }
+      trackedFaces = []; clearCanvas();
+    }
+
+    function renderFaceBoxes() {
+      syncCanvasSize(); clearCanvas();
+      for (var i = 0; i < trackedFaces.length; i++) {
+        var track = trackedFaces[i], box = track.box, color, label;
+        if (track.status === 'recognized') { color = '#22C55E'; label = track.name || 'Student'; }
+        else if (track.status === 'unknown') { color = '#F59E0B'; label = 'Unknown'; }
+        else { color = 'rgba(59,130,246,0.25)'; label = null; }
+        drawFaceBox(box, label, color);
+      }
+    }
+
+    // ── QR frame decoder ──
+    async function decodeQrFromFrame() {
+      if (!stream || !video.videoWidth) return null;
+      var vw = video.videoWidth, vh = video.videoHeight;
+      qrCanvas.width = vw; qrCanvas.height = vh;
+      qrCtx.drawImage(video, 0, 0, vw, vh);
+      if (barcodeSupported && barcodeDetector) {
+        try {
+          var codes = await barcodeDetector.detect(video);
+          if (codes && codes.length > 0 && codes[0].rawValue) return codes[0].rawValue;
+        } catch {}
+      }
+      if (typeof jsQR === 'function') {
+        try {
+          var imageData = qrCtx.getImageData(0, 0, vw, vh);
+          var code = jsQR(imageData.data, vw, vh, { inversionAttempts: 'dontInvert' });
+          if (code && code.data) return code.data;
+        } catch {}
+      }
+      return null;
+    }
+
+    // ── QR detection loop ──
+    function startQrDetectLoop() {
+      if (qrDetectLoop) return;
+      qrDetectLoop = setInterval(async () => {
+        if (!stream || !video.videoWidth || currentMode !== MODES.QR || scanning) return;
+        var qrValue = await decodeQrFromFrame();
+        if (qrValue) {
+          doQrScan(qrValue);
+        }
+      }, 500);
+    }
+
+    function stopQrDetectLoop() { if (qrDetectLoop) { clearInterval(qrDetectLoop); qrDetectLoop = null; } }
+
+    // ── Camera start/stop ──
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } });
+        video.srcObject = stream;
+        video.classList.add('visible');
+        placeholder.classList.add('hidden');
+        syncCanvasSize();
+        startFaceDetectLoop();
+        startQrDetectLoop();
+        setStatus('Camera active', 'active');
+      } catch {
+        setStatus('Camera denied', 'error');
+        alert('Unable to access camera. Please allow camera permissions and reload.');
+      }
+    }
+    window.addEventListener('resize', syncCanvasSize);
+    btnStart.addEventListener('click', startCamera);
+
+    function stopStream() {
+      if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+      video.classList.remove('visible');
+      placeholder.classList.remove('hidden');
+      stopFaceDetectLoop(); stopQrDetectLoop();
+      setStatus('Camera inactive');
+    }
+
+    // ── Cooldown ──
+    function isOnCooldown(userId) {
+      if (!scanCooldowns.has(userId)) return false;
+      return (Date.now() - scanCooldowns.get(userId)) < COOLDOWN_MS;
+    }
+    function setCooldown(userId) { scanCooldowns.set(userId, Date.now()); }
+    function getRemainingCooldown(userId) {
+      if (!scanCooldowns.has(userId)) return 0;
+      const elapsed = Date.now() - scanCooldowns.get(userId);
+      return Math.max(0, Math.ceil((COOLDOWN_MS - elapsed) / 1000));
+    }
+
+    // ── Confirmation overlay ──
+    function showConfirmation(data, method) {
+      confirmPhoto.src = data.photo_url || '/static/images/default-avatar.png';
+      confirmName.textContent = data.user_name || 'Student';
+      confirmId.textContent = 'ID: ' + (data.user_id || '');
+      var info = [];
+      if (data.section) info.push('Section: ' + data.section);
+      if (data.course) info.push(data.course);
+      if (data.year_level) info.push('Year ' + data.year_level);
+      if (data.department_section) info.push(data.department_section);
+      confirmInfo.textContent = info.join(' · ');
+      confirmTime.textContent = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
+      confirmMethod.textContent = 'via ' + (method === MODES.FACE ? 'Face' : method === MODES.QR ? 'QR' : 'RFID');
+      var action = data.scan_action || 'in';
+      var isLate = data.attendance_status === 'LATE';
+      if (action === 'out') { confirmBadge.textContent = '✓ Time Out Logged'; confirmBadge.style.color = '#22c55e'; }
+      else if (isLate) { confirmBadge.textContent = '⏰ Late Check-in'; confirmBadge.style.color = '#f59e0b'; }
+      else { confirmBadge.textContent = '✓ Time In Logged'; confirmBadge.style.color = '#22c55e'; }
+      confirmOverlay.classList.add('visible');
+      var seconds = 4;
+      confirmCountdown.textContent = 'Closing in ' + seconds + 's…';
+      if (confirmTimer) clearInterval(confirmTimer);
+      confirmTimer = setInterval(function () {
+        seconds--;
+        if (seconds <= 0) { clearInterval(confirmTimer); confirmTimer = null; confirmOverlay.classList.remove('visible'); finishScan(); }
+        else { confirmCountdown.textContent = 'Closing in ' + seconds + 's…'; }
+      }, 1000);
+    }
+
+    // ── Add result card ──
+    function addResult(data, isOk, method, suppressed) {
+      suppressed = suppressed || false;
+      emptyState.style.display = 'none';
+      const card = document.createElement('div');
+      card.className = 'result-card ' + (isOk ? 'success' : 'error');
+      const ts = new Date().toLocaleString('en-US', { timeZone: 'Asia/Manila' });
+      const methodLabel = method === MODES.FACE ? 'Face' : method === MODES.QR ? 'QR' : method === MODES.RFID ? 'RFID' : 'Unknown';
+
+      if (isOk && !suppressed) {
+        const inTime = data.time_in || '--', outTime = data.time_out || '--', status = data.attendance_status || 'PRESENT';
+        const action = data.scan_action || 'in';
+        const badgeLabel = action === 'out' ? '✓ Time Out' : (status === 'LATE' ? '⏰ Late' : '✓ Time In');
+        const badgeColor = (action === 'out' || status === 'PRESENT') ? '#22c55e' : '#f59e0b';
+        card.innerHTML = '<div class="method-tag">via ' + esc(methodLabel) + '</div><div class="name">' + esc(data.user_name || 'Unknown') + '</div><div class="id">ID: ' + esc(data.user_id) + '</div><div class="meta"><div class="row"><span class="label">Time In</span><span class="value">' + esc(inTime) + '</span></div><div class="row"><span class="label">Time Out</span><span class="value">' + esc(outTime) + '</span></div><div class="row"><span class="label">Status</span><span class="value">' + esc(status) + '</span></div></div><div class="checkin-badge" style="color:' + badgeColor + ';background:rgba(34,197,94,0.1)">' + badgeLabel + '</div><div class="timestamp">' + ts + '</div>';
+      } else if (isOk && suppressed) {
+        const rem = data._cooldown_secs || '—';
+        card.innerHTML = '<div class="method-tag">via ' + esc(methodLabel) + '</div><div class="name">' + esc(data.user_name || 'Unknown') + '</div><div class="id">ID: ' + esc(data.user_id) + '</div><div class="checkin-badge" style="background:rgba(245,158,11,0.12);color:#f59e0b;">⏱ Cooldown</div><div class="cooldown-badge">Available in ~' + rem + 's</div><div class="timestamp">' + ts + '</div>';
+      } else {
+        card.innerHTML = '<div class="name" style="color:#ef4444">Scan Failed</div><div class="id">' + esc(data.detail || data.message || 'Not recognized') + '</div><div class="method-tag">via ' + esc(methodLabel) + '</div><div class="checkin-badge">✗ Not Logged</div><div class="timestamp">' + ts + '</div>';
+      }
+      resultsList.prepend(card);
+      while (resultsList.children.length > 20) resultsList.removeChild(resultsList.lastChild);
+      resultsScroll.scrollTop = 0;
+    }
+
+    // ── Face scan ──
+    async function doFaceScan() {
+      if (scanning || !stream) return;
+      scanning = true;
+      scanOverlay.classList.add('visible');
+      scanOverlayTxt.textContent = 'Scanning face…';
+      setStatus('Scanning…', 'active');
+
+      var pendingTracks = trackedFaces.filter(function (t) { return t.status === 'pending'; });
+      if (pendingTracks.length === 0) {
+        addResult({ detail: 'No face detected in frame' }, false, MODES.FACE);
+        finishScan();
+        return;
+      }
+
+      var canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640; canvas.height = video.videoHeight || 480;
+      var ctx = canvas.getContext('2d'); ctx.drawImage(video, 0, 0);
+      var processed = 0;
+
+      for (var pi = 0; pi < pendingTracks.length; pi++) {
+        var track = pendingTracks[pi], box = track.box;
+        var padX = box.width * 0.3, padY = box.height * 0.3;
+        var sx = Math.max(0, Math.floor(box.x - padX)), sy = Math.max(0, Math.floor(box.y - padY));
+        var sw = Math.min(canvas.width - sx, Math.ceil(box.width + padX * 2)), sh = Math.min(canvas.height - sy, Math.ceil(box.height + padY * 2));
+        if (sw < 30 || sh < 30) continue;
+        scanOverlayTxt.textContent = 'Scanning face ' + (processed + 1) + ' of ' + pendingTracks.length + '…';
+        track.status = 'processing';
+        var faceCanvas = document.createElement('canvas'); faceCanvas.width = sw; faceCanvas.height = sh;
+        faceCanvas.getContext('2d').drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+        var blob = await new Promise(function (res) { faceCanvas.toBlob(res, 'image/jpeg', 0.9); });
+        if (!blob) continue;
+        var fd = new FormData(); fd.append('device_id', 'gate-scanner-01'); fd.append('image', blob, 'face.jpg');
+        try {
+          var res = await fetch(API_BASE + '/verify', { method: 'POST', body: fd });
+          var data = res.headers.get('content-type') && res.headers.get('content-type').includes('application/json') ? await res.json() : null;
+          if (!res.ok) { track.status = 'unknown'; addResult(data || { detail: 'Verification failed' }, false, MODES.FACE); }
+          else {
+            var userId = data.user_id;
+            if (isOnCooldown(userId)) { track.status = 'unknown'; addResult({ ...data, _cooldown: true, _cooldown_secs: getRemainingCooldown(userId) }, true, MODES.FACE, true); }
+            else { setCooldown(userId); track.status = 'recognized'; track.name = data.user_name || 'Student'; track.userId = userId; addResult(data, true, MODES.FACE); showConfirmation(data, MODES.FACE); }
+          }
+        } catch { track.status = 'unknown'; addResult({ detail: 'Network error' }, false, MODES.FACE); }
+        processed++;
+      }
+      if (processed === 0) addResult({ detail: 'Could not process any valid face' }, false, MODES.FACE);
+      if (!confirmOverlay.classList.contains('visible')) finishScan();
+    }
+
+    // ── QR scan ──
+    async function doQrScan(token) {
+      if (scanning) return;
+      scanning = true;
+      scanOverlay.classList.add('visible');
+      scanOverlayTxt.textContent = 'Verifying QR…';
+      setStatus('Verifying…', 'active');
+      var fd = new FormData(); fd.append('qr_token', token); fd.append('device_id', 'gate-scanner-01');
+      try {
+        var res = await fetch(API_BASE + '/verify/qr', { method: 'POST', body: fd });
+        var data = res.headers.get('content-type') && res.headers.get('content-type').includes('application/json') ? await res.json() : null;
+        if (!res.ok) { addResult(data || { detail: 'QR verification failed' }, false, MODES.QR); }
+        else {
+          var userId = data.user_id;
+          if (isOnCooldown(userId)) { addResult({ ...data, _cooldown: true, _cooldown_secs: getRemainingCooldown(userId) }, true, MODES.QR, true); }
+          else { setCooldown(userId); addResult(data, true, MODES.QR); showConfirmation(data, MODES.QR); }
+        }
+      } catch { addResult({ detail: 'Network error' }, false, MODES.QR); }
+      if (!confirmOverlay.classList.contains('visible')) finishScan();
+    }
+
+    // ── Mode switching ──
+    function switchMode(mode) {
+      if (mode === currentMode) return;
+      if (confirmTimer) { clearInterval(confirmTimer); confirmTimer = null; }
+      confirmOverlay.classList.remove('visible');
+      scanOverlay.classList.remove('visible');
+      scanning = false;
+
+      // Hide all mode sections
+      camSection.style.display = 'none';
+      rfidSection.classList.remove('visible');
+      btnManual.style.display = 'none';
+      scanCorners.classList.remove('visible');
+
+      // Update button states
+      modeButtons.forEach(function (b) { b.classList.remove('primary', 'active'); });
+      if (mode === MODES.FACE) btnFaceMode.classList.add('primary');
+      else if (mode === MODES.QR) btnQrMode.classList.add('primary');
+      else if (mode === MODES.RFID) btnRfidMode.classList.add('primary');
+
+      currentMode = mode;
+
+      if (mode === MODES.FACE) {
+        camSection.style.display = 'flex';
+        scanCorners.classList.add('visible');
+        brandSub.textContent = 'Face Scanner';
+        if (!stream && !placeholder.classList.contains('hidden')) {
+          placeholderText.textContent = 'Tap to start the camera';
+        }
+        setStatus(stream ? 'Camera active' : 'Camera inactive', stream ? 'active' : null);
+        if (stream) { startFaceDetectLoop(); startQrDetectLoop(); }
+      } else if (mode === MODES.QR) {
+        camSection.style.display = 'flex';
+        scanCorners.classList.add('visible');
+        brandSub.textContent = 'QR Scanner';
+        if (!stream && !placeholder.classList.contains('hidden')) {
+          placeholderText.textContent = 'Tap to start the camera';
+        }
+        setStatus(stream ? 'Camera active' : 'Camera inactive', stream ? 'active' : null);
+        if (stream) { startFaceDetectLoop(); startQrDetectLoop(); }
+      } else if (mode === MODES.RFID) {
+        camSection.style.display = 'none';
+        rfidSection.classList.add('visible');
+        btnManual.style.display = 'flex';
+        brandSub.textContent = 'RFID Scanner';
+        rfidInput.value = '';
+        setStatus('Ready');
+      }
+    }
+
+    btnFaceMode.addEventListener('click', function () { switchMode(MODES.FACE); });
+    btnQrMode.addEventListener('click', function () { switchMode(MODES.QR); });
+    btnRfidMode.addEventListener('click', function () { switchMode(MODES.RFID); });
+
+    // ── RFID event handlers ──
+    document.addEventListener('rfid:scanning-start', function () {
+      if (currentMode === MODES.RFID) {
+        rfidIcon.classList.add('scanning');
+      }
+    });
+
+    document.addEventListener('rfid:scanning-end', function () {
+      if (currentMode === MODES.RFID) {
+        rfidIcon.classList.remove('scanning');
+      }
+    });
+
+    document.addEventListener('rfid:success', function (e) {
+      var data = e.detail;
+      addResult(data, true, MODES.RFID);
+      showConfirmation(data, MODES.RFID);
+      if (currentMode === MODES.RFID) {
+        rfidInput.value = '';
+      }
+    });
+
+    document.addEventListener('rfid:error', function (e) {
+      addResult({ detail: e.detail.detail }, false, MODES.RFID);
+      if (currentMode === MODES.RFID) {
+        rfidInput.value = '';
+      }
+    });
+
+    document.addEventListener('rfid:cooldown', function (e) {
+      var data = e.detail;
+      addResult(Object.assign({}, data, { _cooldown: true, _cooldown_secs: data.remaining }), true, MODES.RFID, true);
+    });
+
+    // ── Face scan trigger ──
+    document.addEventListener('keydown', function (e) {
+      if (e.key === ' ' && currentMode === MODES.FACE && stream && !scanning) {
+        e.preventDefault();
+        doFaceScan();
+      }
+    });
+
+    // ── RFID: use global listener ──
+    function focusHidden() {
+      // Global listener handles focus
+    }
+
+    // Manual entry via global listener
+    btnManual.addEventListener('click', function () {
+      var uid = prompt('Enter RFID UID manually:');
+      if (uid && uid.trim()) {
+        if (window.RFIDListener) {
+          window.RFIDListener.processManual(uid.trim());
+        }
+      }
+    });
+
+    // ── Beep ──
+    function playBeep(success) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.frequency.value = success ? 880 : 220; osc.type = 'sine';
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (success ? 0.25 : 0.4));
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
+      } catch {}
+    }
+
+    // ── Clear ──
+    btnClear.addEventListener('click', function () {
+      resultsList.innerHTML = ''; trackedFaces = []; nextTrackId = 0;
+      emptyState.style.display = 'block';
+    });
+
+    // ── Fullscreen ──
+    document.getElementById('btn-fullscreen').addEventListener('click', function () {
+      if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(function () {}); }
+      else { document.exitFullscreen().catch(function () {}); }
+    });
+
+    // ── Utility ──
+    function esc(str) { return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+    // ── Start global RFID listener ──
+    window.addEventListener('load', function () {
+      if (window.RFIDListener) {
+        window.RFIDListener.start();
+      }
+    });
+
+    // ── Load: show Face mode by default ──
+    switchMode(MODES.FACE);
+    window.addEventListener('beforeunload', stopStream);
+  </script>
+</body>
+</html>
