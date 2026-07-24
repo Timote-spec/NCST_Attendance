@@ -1,6 +1,5 @@
 import datetime
 
-import bcrypt
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 
@@ -16,6 +15,7 @@ from app.database import (
 )
 from app.routes.auth import get_current_admin
 from app.config import settings
+from app.password_utils import hash_password
 from app.schemas import AdminListRow, AuditLogRow, CreateAdminRequest, GenericResponse, LogRow, RegistrantListRow, UpdateAdminRequest, UpdateRegistrantRequest
 from app.services.face_service import face_service
 
@@ -384,7 +384,7 @@ def bulk_import_students(payload: dict, _admin: str = Depends(get_current_admin)
             if role not in ("STUDENT", "STAFF", "FACULTY"):
                 role = "STUDENT"
             now = pst_str()
-            pw_hash = bcrypt.hashpw(DEFAULT_PASSWORD.encode(), bcrypt.gensalt()).decode()
+            pw_hash = hash_password(DEFAULT_PASSWORD)
             conn.execute(
                 """INSERT OR IGNORE INTO registrants (user_id, first_name, last_name, role, department_section, status, created_at, email, password_hash, course, year_level, section, contact_number, address, emergency_contact)
                        VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -547,7 +547,7 @@ def admin_reset_password(
     row = conn.execute("SELECT user_id, first_name, last_name FROM registrants WHERE user_id = ?", (user_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
-    new_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    new_hash = hash_password(new_password)
     conn.execute("UPDATE registrants SET password_hash = ? WHERE user_id = ?", (new_hash, user_id))
     conn.commit()
     create_notification(user_id, "Password reset by administrator", "Your password was reset by an administrator. Please use the new credentials.", "SECURITY")
@@ -569,7 +569,7 @@ def create_admin_account(body: CreateAdminRequest, _admin: str = Depends(get_cur
     if existing:
         raise HTTPException(status_code=409, detail="An admin with this email already exists")
 
-    password_hash = bcrypt.hashpw(DEFAULT_PASSWORD.encode(), bcrypt.gensalt()).decode()
+    password_hash = hash_password(DEFAULT_PASSWORD)
     admin_id = email.split("@")[0]
     now_str = pst_str()
     try:

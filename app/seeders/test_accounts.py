@@ -6,10 +6,10 @@ Passwords are bcrypt-hashed before storage.
 
 from __future__ import annotations
 
-import bcrypt as _bcrypt
 import sqlite3
 
 from app.database import get_db_connection, pst_str
+from app.password_utils import hash_password
 
 TEST_ACCOUNTS = {
     "admin": {
@@ -60,12 +60,8 @@ TEST_ACCOUNTS = {
 }
 
 
-def _hash_password(password: str) -> str:
-    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
-
-
 def _upsert_admin(conn: sqlite3.Connection, username: str, account: dict) -> None:
-    password_hash = _hash_password(account["password"])
+    password_hash = hash_password(account["password"])
     existing = conn.execute(
         "SELECT admin_id FROM admins WHERE admin_id = ? OR email = ?",
         (username, account["email"]),
@@ -105,7 +101,7 @@ def _upsert_admin(conn: sqlite3.Connection, username: str, account: dict) -> Non
 
 
 def _upsert_registrant(conn: sqlite3.Connection, username: str, account: dict) -> None:
-    password_hash = _hash_password(account["password"])
+    password_hash = hash_password(account["password"])
     existing = conn.execute(
         "SELECT user_id FROM registrants WHERE user_id = ? OR email = ?",
         (username, account["email"]),

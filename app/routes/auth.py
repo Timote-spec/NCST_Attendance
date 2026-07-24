@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, timezone
 
-import bcrypt as _bcrypt
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -15,6 +14,7 @@ from app.database import (
     pst_str,
 )
 from app.email_service import send_otp_email
+from app.password_utils import hash_password, verify_password
 from app.services.rate_limit import limiter
 from app.otp_service import (
     OTP_PURPOSE_PASSWORD_RESET,
@@ -24,6 +24,7 @@ from app.otp_service import (
     can_request_password_reset_otp,
 )
 from app.schemas import (
+    ChangePasswordRequest,
     GenericResponse,
     LoginRequest,
     RequestOtpRequest,
@@ -37,16 +38,6 @@ _security = HTTPBearer(auto_error=False)
 
 
 # ─── JWT helpers ───────────────────────────────────────────────────
-
-def _hash_password(password: str) -> str:
-    return _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
-
-
-def _verify_password(password: str, password_hash: str) -> bool:
-    if not password_hash:
-        return False
-    return _bcrypt.checkpw(password.encode(), password_hash.encode())
-
 
 def _create_token(user_id: str, role: str = "ADMIN") -> str:
     now = datetime.now(timezone.utc)
@@ -136,7 +127,7 @@ def login(body: LoginRequest, request: Request):
     email = body.email.strip().lower()
     account = find_user_by_email(email)
 
-    if not account or not _verify_password(body.password, account["password_hash"]):
+    if not account or not verify_password(body.password, account["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     if account["kind"] == "ADMIN" and account.get("status") == "ARCHIVED":
@@ -171,22 +162,22 @@ def logout(_user: dict = Depends(get_current_user)):
 
 
 @router.post("/auth/change-password", response_model=GenericResponse)
-def change_password(body: dict, _user: dict = Depends(get_current_user)):
-    old_pw = (body.get("old_password") or "").strip()
-    new_pw = (body.get("new_password") or "").strip()
+def change_password(body: ChangePasswordRequest, _user: dict = Depends(get_current_user)):
+    old_pw = body.old_password.strip()
+    new_pw = body.new_password.strip()
     if len(new_pw) < 6:
         raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
     conn = get_db_connection()
     if _user["role"] == "ADMIN":
         row = conn.execute("SELECT password_hash FROM admins WHERE admin_id = ?", (_user["user_id"],)).fetchone()
-        if not row or not _verify_password(old_pw, row["password_hash"]):
+        if not row or not verify_password(old_pw, row["password_hash"]):
             raise HTTPException(status_code=400, detail="Current password is incorrect")
-        conn.execute("UPDATE admins SET password_hash = ? WHERE admin_id = ?", (_hash_password(new_pw), _user["user_id"]))
+        conn.execute("UPDATE admins SET password_hash = ? WHERE admin_id = ?", (hash_password(new_pw), _user["user_id"]))
     else:
         row = conn.execute("SELECT password_hash FROM registrants WHERE user_id = ?", (_user["user_id"],)).fetchone()
-        if not row or not _verify_password(old_pw, row["password_hash"]):
+        if not row or not verify_password(old_pw, row["password_hash"]):
             raise HTTPException(status_code=400, detail="Current password is incorrect")
-        conn.execute("UPDATE registrants SET password_hash = ? WHERE user_id = ?", (_hash_password(new_pw), _user["user_id"]))
+        conn.execute("UPDATE registrants SET password_hash = ? WHERE user_id = ?", (hash_password(new_pw), _user["user_id"]))
     conn.commit()
     if _user["role"] != "ADMIN":
         create_notification(_user["user_id"], "Password changed", "Your password was changed successfully.", "SECURITY")
@@ -305,7 +296,7 @@ def reset_password_with_otp(body: ResetPasswordRequest):
         )
 
     # 3. Securely hash password and update
-    new_hash = _hash_password(pw)
+    new_hash = hash_password(pw)
     if account["kind"] == "ADMIN":
         conn.execute("UPDATE admins SET password_hash = ? WHERE email = ?", (new_hash, email))
     else:
