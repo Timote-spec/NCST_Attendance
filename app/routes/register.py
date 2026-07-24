@@ -1,10 +1,10 @@
-import bcrypt
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 
 from app.config import settings
 from app.database import get_db_connection, get_admin_email, log_system_action, pst_str
 from app.email_service import send_welcome_email_async
+from app.password_utils import hash_password
 from app.routes.auth import get_current_admin
 from app.schemas import RegistrantResponse
 from app.services.face_service import face_service
@@ -44,7 +44,7 @@ async def register_registrant(
 
     embedding_blob = np.array(embedding, dtype=np.float32).tobytes()
 
-    password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    password_hash = hash_password(password)
 
     conn = get_db_connection()
     now_str = pst_str()

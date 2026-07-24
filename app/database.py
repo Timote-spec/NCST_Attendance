@@ -3,9 +3,8 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-import bcrypt as _bcrypt
-
 from app.config import settings
+from app.password_utils import hash_password, verify_password
 from app.utils import get_pst_now
 
 DB_PATH = Path(settings.database_path)
@@ -89,6 +88,43 @@ def _migrate_rfid(conn):
     if not _has_column(conn, "registrants", "rfid_uid"):
         conn.execute("ALTER TABLE registrants ADD COLUMN rfid_uid TEXT")
         conn.commit()
+
+
+def _migrate_notifications(conn):
+    """Recreate notifications table with updated CHECK constraint if needed."""
+    try:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='notifications'"
+        ).fetchone()
+        if not row:
+            return
+        ddl = row["sql"]
+        if "'SECURITY'" in ddl:
+            return  # already has the new constraint
+    except Exception:
+        return
+
+    # SQLite cannot ALTER CHECK constraints — rebuild the table
+    conn.execute("ALTER TABLE notifications RENAME TO notifications_old")
+    conn.execute("""
+        CREATE TABLE notifications (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id       TEXT NOT NULL,
+            title         TEXT NOT NULL,
+            message       TEXT NOT NULL,
+            notification_type TEXT NOT NULL DEFAULT 'INFO'
+                          CHECK(notification_type IN ('INFO','ATTENDANCE','APPROVAL','SYSTEM','SECURITY')),
+            is_read       INTEGER NOT NULL DEFAULT 0,
+            created_at    TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        INSERT INTO notifications (id, user_id, title, message, notification_type, is_read, created_at)
+        SELECT id, user_id, title, message, notification_type, is_read, created_at
+          FROM notifications_old
+    """)
+    conn.execute("DROP TABLE notifications_old")
+    conn.commit()
 
 
 def _migrate_attendance_logs(conn):
@@ -198,7 +234,7 @@ def init_db():
             user_id       TEXT NOT NULL,
             title         TEXT NOT NULL,
             message       TEXT NOT NULL,
-            notification_type TEXT NOT NULL DEFAULT 'INFO' CHECK(notification_type IN ('INFO','ATTENDANCE','APPROVAL','SYSTEM')),
+            notification_type TEXT NOT NULL DEFAULT 'INFO' CHECK(notification_type IN ('INFO','ATTENDANCE','APPROVAL','SYSTEM','SECURITY')),
             is_read       INTEGER NOT NULL DEFAULT 0,
             created_at    TIMESTAMP
         );
@@ -238,6 +274,7 @@ def init_db():
     conn.commit()
     _migrate_students(conn)
     _migrate_admins(conn)
+    _migrate_notifications(conn)
     _migrate_attendance_logs(conn)
     _migrate_rfid(conn)
     _create_indexes(conn)
@@ -275,9 +312,7 @@ def _create_indexes(conn: sqlite3.Connection):
 
 def _ensure_main_admin(conn: sqlite3.Connection):
     main_email = settings.main_admin_email.strip().lower()
-    new_hash = _bcrypt.hashpw(
-        "NCST 2026".encode(), _bcrypt.gensalt()
-    ).decode()
+    new_hash = hash_password("NCST 2026")
 
     by_id = conn.execute(
         "SELECT admin_id, email, password_hash FROM admins WHERE admin_id = ?",
@@ -289,9 +324,7 @@ def _ensure_main_admin(conn: sqlite3.Connection):
     ).fetchone()
 
     if by_email:
-        needs_password_update = _bcrypt.checkpw(
-            b"admin123", by_email["password_hash"].encode()
-        )
+        needs_password_update = verify_password("admin123", by_email["password_hash"])
         password_hash = new_hash if needs_password_update else by_email["password_hash"]
         if by_email["admin_id"] != "admin" and by_id:
             conn.execute("DELETE FROM admins WHERE admin_id = ?", ("admin",))
@@ -308,9 +341,7 @@ def _ensure_main_admin(conn: sqlite3.Connection):
         return
 
     if by_id:
-        needs_password_update = _bcrypt.checkpw(
-            b"admin123", by_id["password_hash"].encode()
-        )
+        needs_password_update = verify_password("admin123", by_id["password_hash"])
         password_hash = new_hash if needs_password_update else by_id["password_hash"]
         conn.execute(
             """
@@ -375,6 +406,9 @@ def get_admin_email(admin_id: str) -> str | None:
     return row["email"] if row else None
 
 
+_ALLOWED_NOTIFICATION_TYPES = {'INFO', 'ATTENDANCE', 'APPROVAL', 'SYSTEM', 'SECURITY'}
+
+
 def create_notification(
     user_id: str,
     title: str,
@@ -382,6 +416,8 @@ def create_notification(
     notification_type: str = "INFO",
 ) -> None:
     """Create an in-app notification for a registrant (student/staff/faculty)."""
+    if notification_type not in _ALLOWED_NOTIFICATION_TYPES:
+        notification_type = "SYSTEM"
     conn = get_db_connection()
     conn.execute(
         """INSERT INTO notifications (user_id, title, message, notification_type, is_read, created_at)
